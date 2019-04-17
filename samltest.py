@@ -297,15 +297,17 @@ class IdpFactory(object):
 
 
 class SamlLoginTest(object):
-    def __init__(self, idp_factory, sp_factory):
+    def __init__(self, idp_factory, sp_factory, verify=True):
         self.idp_factory = idp_factory
         self.sp_factory = sp_factory
         self._session = None
+        self.verify = verify
 
     @property
     def session(self):
         if self._session is None:
             self._session = requests.Session()
+            self._session.verify = self.verify
         return self._session
 
     @session.setter
@@ -392,6 +394,7 @@ if __name__ == "__main__":
     parser.add_argument('--username', action='store', type=str)
     parser.add_argument('--password', action='store', type=str)
     parser.add_argument('-d', '--debug', action='count', default=0)
+    parser.add_argument('--no-verify', action='store_true')
 
     args = parser.parse_args()
 
@@ -404,7 +407,8 @@ if __name__ == "__main__":
 
     login_test = SamlLoginTest(IdpFactory(args.idp_type, args.idp_url),
                                SpFactory(args.url, args.sp_type,
-                                         args.sp_url, args.idp_url))
+                                         args.sp_url, args.idp_url),
+                               not args.no_verify)
 
     # Gets the page using the WebSSO flow
     login_test.redirect_post_flow(args.url,
