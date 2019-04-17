@@ -149,7 +149,7 @@ class MellonAuthnRequest(AuthnRequest):
                                     parsed_loc.hostname)
         if parsed_loc.path != '/mellon/login':
             raise AuthnRequestError("Mellon did not redirect to /mellon/login",
-                                    "mellon/login", parsed.path)
+                                    "mellon/login", parsed_loc.path)
 
         parsed_qs = urllib.parse.parse_qs(parsed_loc.query)
         return_to = parsed_qs.get('ReturnTo', [])
