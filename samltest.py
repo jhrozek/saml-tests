@@ -60,6 +60,7 @@ def get_location_from_redirect(redirect):
                         "303", str(redirect.status_code))
     return redirect.headers.get('Location')
 
+
 def same_normalized_url(orig, received):
     orig_normalized = urllib.parse.urlunparse(
                                     urllib.parse.urlparse(orig))
@@ -330,6 +331,8 @@ class SamlLoginTest(object):
         if username is None or password is None:
             raise NoCredentialsError
 
+        logging.info("Running the WebSSO redirect-POST flow")
+
         # Eventually we should get a 200..
         document_get = self.session.get(url)
         if document_get.status_code != 200:
@@ -341,6 +344,7 @@ class SamlLoginTest(object):
         authn_request = self.sp_factory.authn_request(url,
                                                       self.idp_factory.idp)
         authn_request.check_from_reply(document_get)
+        logging.info("The AuthnRequest from SP to IDP is OK")
 
         # Try to login to the IdP
         login_reply = self.idp_factory.idp_login(self.session,
@@ -348,6 +352,8 @@ class SamlLoginTest(object):
                                                  username, password)
         if login_reply.status_code != 200:
             raise SamlFlowError(login_reply.status_code)
+
+        logging.info(f"Logged in to the IDP as {username}")
 
         # check the response from the IDP
         # If the reply contained a ReturnTo, the response must match it
@@ -360,6 +366,8 @@ class SamlLoginTest(object):
         if assertion_path != self.sp_factory.assertion_path:
             raise ValueError("The request and reply AssertionUrl do not match")
 
+        logging.info(f"Verified the response from IDP")
+
         # The login returns 200 and a JS form in body which would normally
         # redirect us to the IDP. Since there is no JS in this python-requests
         # driven script, let's POST the reply ourselves to the SP
@@ -369,8 +377,11 @@ class SamlLoginTest(object):
         # Make sure we finally got to the URL we wanted initially
         if sp_consumer_reply.status_code != 200:
             raise SamlFlowError(sp_consumer_reply.status_code)
+        logging.info(f"Reached the SP again")
+
         if not same_normalized_url(url, sp_consumer_reply.url):
             raise ValueError("Expected to reach a different location")
+        logging.info(f"Retrieved {url} from the SP")
 
         # And make sure we got the contents we wanted initially
         if page_check_fn is not None and \
@@ -411,18 +422,24 @@ if __name__ == "__main__":
                                not args.no_verify)
 
     # Gets the page using the WebSSO flow
+    logging.info(f"About to run the WebSSO flow for {args.url} with "
+                  "an empty session")
     login_test.redirect_post_flow(args.url,
                                   args.username, args.password,
                                   is_my_page)
 
     # Let's try fetching the page again, this should just succeed with
     # one redirect to mellon
+    logging.info(f"Re-using cached session")
     sp_resource = login_test.session.get(args.url)
     assert len(sp_resource.history) == 1
     if not same_normalized_url(args.url, sp_resource.url):
         raise ValueError("Expected to reach a different location")
+    logging.info(f"OK, retrieved {args.url} without contacting IdP")
 
     # ..but not if we remove the session
+    logging.info(f"Clearing the session")
     login_test.clear_session()
     sp_resource = login_test.session.get(args.url)
     assert len(sp_resource.history) == 2
+    logging.info(f"OK, got redirected to IdP again")
